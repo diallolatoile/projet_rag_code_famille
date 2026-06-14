@@ -7,6 +7,10 @@
 rag_api_infra/.env
 rag_api_infra/*.env
 rag_api_infra/!.env.example
+
+n8n-infra/.env
+n8n-infra/*.env
+n8n-infra/!.env.example
 # =====================================================================
 # Python
 # =====================================================================
