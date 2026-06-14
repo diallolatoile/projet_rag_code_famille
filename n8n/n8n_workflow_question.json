@@ -1,0 +1,202 @@
+{
+  "name": "RAG Code Famille - Question",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-code-famille",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "q1",
+      "name": "Webhook (question)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "rag-code-famille"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'nomic-embed-text', prompt: $json.body.question }) }}",
+        "options": {}
+      },
+      "id": "q2",
+      "name": "Embedding question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chunk_id, text, metadata,\n       1 - (embedding <=> $1::vector) AS similarite\nFROM code_famille_chunks\nORDER BY embedding <=> $1::vector\nLIMIT 5;",
+        "options": {
+          "queryReplacement": "={{ '[' + $json.embedding.join(',') + ']' }}"
+        }
+      },
+      "id": "q3",
+      "name": "Recherche pgvector",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Récupère la question + construit le contexte pour le LLM\nconst question = $('Webhook (question)').first().json.body.question;\nconst articles = [];\nconst ctx = [];\nfor (const item of $input.all()) {\n  const m = item.json.metadata;\n  ctx.push(`[Article ${m.article} \\u2014 ${m.titre || ''} (page ${m.page})]\\n${item.json.text}`);\n  articles.push({\n    article: m.article,\n    titre: m.titre,\n    livre: m.livre, chapitre: m.chapitre, section: m.section, paragraphe: m.paragraphe,\n    page: m.page,\n    pdf_url: m.pdf_url,\n    extrait: item.json.text,\n    similarite: Math.round((item.json.similarite || 0) * 100) / 100\n  });\n}\nconst prompt = `Tu es un assistant juridique. Reponds a la question en t'appuyant UNIQUEMENT sur les extraits du Code de la Famille ci-dessous. Cite les numeros d'articles utilises.\\n\\n### Extraits\\n${ctx.join('\\n\\n')}\\n\\n### Question\\n${question}\\n\\n### Reponse (en francais, precise et sourcee) :`;\nreturn [{ json: { question, prompt, articles } }];"
+      },
+      "id": "q4",
+      "name": "Construire le prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama3.2', prompt: $json.prompt, stream: false }) }}",
+        "options": {}
+      },
+      "id": "q5",
+      "name": "Générer (llama3.2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble la sortie : reponse + 2 formats (markdown pour chat, json pour web)\nconst reponse = ($json.response || '').trim();\nconst articles = $('Construire le prompt').first().json.articles;\nconst question = $('Construire le prompt').first().json.question;\n\n// --- format Markdown (chat n8n natif) ---\nlet md = reponse + '\\n\\n---\\n**Sources :**\\n';\nfor (const a of articles) {\n  md += `\\n> **Article ${a.article} \\u2014 ${a.titre || ''}**\\n> ${a.extrait.slice(0, 240)}...\\n>\\n> [Ouvrir page ${a.page}](${a.pdf_url})\\n`;\n}\n\nreturn [{ json: { question, reponse, articles, markdown: md } }];"
+      },
+      "id": "q6",
+      "name": "Formater la réponse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "q7",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (question)": {
+      "main": [
+        [
+          {
+            "node": "Embedding question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding question": {
+      "main": [
+        [
+          {
+            "node": "Recherche pgvector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recherche pgvector": {
+      "main": [
+        [
+          {
+            "node": "Construire le prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire le prompt": {
+      "main": [
+        [
+          {
+            "node": "Générer (llama3.2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Générer (llama3.2)": {
+      "main": [
+        [
+          {
+            "node": "Formater la réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formater la réponse": {
+      "main": [
+        [
+          {
+            "node": "Répondre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

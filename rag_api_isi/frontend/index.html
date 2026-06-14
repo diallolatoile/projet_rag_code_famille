@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chatbot Juridique — Code de la Famille (React)</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --encre:#16263A; --papier:#f7f5f0; --carte:#fff;
+    --accent:#1d6e56; --accent-cl:#e1f5ee; --or:#b58a2e;
+    --bordure:#e3ded3; --muet:#6b6358;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--papier); color:var(--encre);
+    font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif; }
+  .bandeau { background:var(--encre); color:var(--papier); padding:16px 24px;
+    border-bottom:3px solid var(--or); }
+  .bandeau h1 { margin:0; font-size:18px; font-weight:600; }
+  .bandeau p { margin:2px 0 0; font-size:12px; color:#b8c2cc; font-family:system-ui,sans-serif; }
+  .layout { display:flex; height:calc(100vh - 64px); }
+  .chat { flex:1; overflow-y:auto; padding:22px 24px; }
+  .viewer { width:0; transition:width .25s; overflow:hidden; background:#22344a; }
+  .viewer.ouvert { width:46%; }
+  .barre { display:flex; gap:10px; margin-bottom:20px; }
+  input.q { flex:1; padding:12px 15px; border:1px solid var(--bordure); border-radius:8px;
+    font-size:15px; font-family:system-ui,sans-serif; }
+  input.q:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  button { padding:0 20px; border:none; border-radius:8px; background:var(--accent);
+    color:#fff; font-size:14px; font-family:system-ui,sans-serif; font-weight:500; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .btn-sec { background:transparent; color:var(--muet); border:1px solid var(--bordure); }
+  .reponse { background:var(--carte); border:1px solid var(--bordure); border-radius:10px;
+    padding:18px 20px; margin-bottom:18px; font-size:16px; line-height:1.6; }
+  .etiq { font-family:system-ui,sans-serif; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:8px; }
+  .src-titre { font-family:system-ui,sans-serif; font-size:12px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muet); margin:0 0 10px; }
+  .src { background:var(--accent-cl); border-left:4px solid var(--accent);
+    border-radius:0 6px 6px 0; padding:11px 15px; margin-bottom:10px; }
+  .src .ref { font-family:system-ui,sans-serif; font-size:13px; font-weight:600; color:#0f5440; margin-bottom:6px; }
+  .src .liens { display:flex; gap:14px; }
+  .src a, .src .lien { font-family:system-ui,sans-serif; font-size:13px; color:var(--accent);
+    text-decoration:none; font-weight:500; cursor:pointer; }
+  .src a:hover, .src .lien:hover { text-decoration:underline; }
+  .score { float:right; font-size:10px; color:var(--or); background:#fbf3df;
+    padding:2px 7px; border-radius:10px; font-family:system-ui,sans-serif; }
+  .vide, .charge { text-align:center; color:var(--muet); font-family:system-ui,sans-serif;
+    font-size:14px; padding:36px 0; }
+  .v-barre { display:flex; align-items:center; gap:10px; padding:10px 14px;
+    background:var(--encre); color:#fff; font-family:system-ui,sans-serif; font-size:13px; }
+  .v-barre button { padding:5px 11px; font-size:13px; background:#33455c; }
+  .v-zone { padding:14px; overflow:auto; height:calc(100% - 46px); text-align:center; }
+  .v-zone canvas { max-width:100%; box-shadow:0 2px 12px rgba(0,0,0,.3); }
+  .historique { font-family:system-ui,sans-serif; font-size:12px; color:var(--muet); margin-bottom:14px; }
+  .hist-item { cursor:pointer; }
+  .hist-item:hover { color:var(--accent); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+const API_CHAT = (location.port === "8000" ? "" : "http://localhost:8000") + "/api/chat";
+const PDF_URL = "http://localhost:8080/CODE-DE-LA-FAMILLE.pdf";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+function Visionneuse({ page, onFermer }) {
+  const canvasRef = useRef(null);
+  const docRef = useRef(null);
+  const [num, setNum] = useState(page);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => { setNum(page); }, [page]);
+
+  useEffect(() => {
+    let annule = false;
+    pdfjsLib.getDocument(PDF_URL).promise.then(doc => {
+      if (annule) return;
+      docRef.current = doc;
+      setTotal(doc.numPages);
+      rendre(num);
+    }).catch(() => {});
+    return () => { annule = true; };
+  }, []);
+
+  useEffect(() => { if (docRef.current) rendre(num); }, [num]);
+
+  function rendre(n) {
+    const doc = docRef.current;
+    if (!doc) return;
+    doc.getPage(n).then(pg => {
+      const viewport = pg.getViewport({ scale: 1.3 });
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      pg.render({ canvasContext: ctx, viewport });
+    });
+  }
+
+  return (
+    <div>
+      <div className="v-barre">
+        <button onClick={() => setNum(n => Math.max(1, n - 1))}>◀</button>
+        <span>Page {num} / {total || "…"}</span>
+        <button onClick={() => setNum(n => Math.min(total, n + 1))}>▶</button>
+        <span style={{ flex: 1 }}></span>
+        <button onClick={onFermer}>Retour au chat ✕</button>
+      </div>
+      <div className="v-zone"><canvas ref={canvasRef}></canvas></div>
+    </div>
+  );
+}
+
+function App() {
+  const [question, setQuestion] = useState("");
+  const [data, setData] = useState(null);
+  const [charge, setCharge] = useState(false);
+  const [pagePdf, setPagePdf] = useState(null);
+  const [histo, setHisto] = useState([]);
+
+  async function poser(q) {
+    const txt = (q || question).trim();
+    if (!txt) return;
+    setCharge(true); setData(null);
+    try {
+      const r = await fetch(API_CHAT, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: txt, top_k: 4 })
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      setData(d);
+      setHisto(h => [txt, ...h.filter(x => x !== txt)].slice(0, 6));
+    } catch (e) {
+      setData({ erreur: "Impossible de joindre l'API (port 8000)." });
+    } finally { setCharge(false); }
+  }
+
+  return (
+    <div>
+      <div className="bandeau">
+        <h1>Chatbot Juridique — Code de la Famille sénégalais</h1>
+        <p>Réponse sourcée avec navigation directe dans le PDF officiel</p>
+      </div>
+      <div className="layout">
+        <div className="chat">
+          <div className="barre">
+            <input className="q" value={question}
+              onChange={e => setQuestion(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && poser()}
+              placeholder="Ex : Quelles sont les conditions d'âge pour se marier ?" />
+            <button onClick={() => poser()} disabled={charge}>Demander</button>
+            <button className="btn-sec" onClick={() => { setData(null); setQuestion(""); }}>Réinitialiser</button>
+          </div>
+
+          {histo.length > 0 &&
+            <div className="historique">
+              Récentes :{histo.map((h, i) =>
+                <span key={i} className="hist-item" onClick={() => { setQuestion(h); poser(h); }}> {h}{i < histo.length - 1 ? "  ·" : ""}</span>)}
+            </div>}
+
+          {charge && <div className="charge">Recherche dans le Code de la Famille…</div>}
+          {!charge && !data && <div className="vide">Posez une question pour commencer.</div>}
+          {data && data.erreur && <div className="charge">{data.erreur}</div>}
+
+          {data && !data.erreur &&
+            <div>
+              <div className="reponse">
+                <div className="etiq">Réponse</div>
+                {data.reponse.split("\n").map((l, i) => <p key={i} style={{ margin: "0 0 8px" }}>{l}</p>)}
+              </div>
+              {data.sources && data.sources.length > 0 &&
+                <div>
+                  <p className="src-titre">Sources utilisées</p>
+                  {data.sources.map((s, i) =>
+                    <div className="src" key={i}>
+                      {s.score && <span className="score">Score {s.score.toFixed(2)}</span>}
+                      <div className="ref">Art. {s.id_article} — {s.titre_article || ""}</div>
+                      <div className="liens">
+                        <span className="lien" onClick={() => setPagePdf(s.page)}>Voir dans le PDF (page {s.page})</span>
+                        <a href={s.pdf_url} target="_blank" rel="noreferrer">Plein écran ↗</a>
+                      </div>
+                    </div>)}
+                </div>}
+            </div>}
+        </div>
+
+        <div className={"viewer" + (pagePdf ? " ouvert" : "")}>
+          {pagePdf && <Visionneuse page={pagePdf} onFermer={() => setPagePdf(null)} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

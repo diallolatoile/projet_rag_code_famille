@@ -1,0 +1,214 @@
+{
+  "name": "RAG Code Famille - Indexation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "n1",
+      "name": "Démarrer (manuel)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/shared/articles_chunks.json",
+        "options": {}
+      },
+      "id": "n2",
+      "name": "Lire le JSON",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "id": "n3",
+      "name": "Parser JSON",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "n4",
+      "name": "Éclater en articles",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 20
+      },
+      "id": "n5",
+      "name": "Limite (test 20)",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        300
+      ],
+      "notes": "Désactiver ou supprimer ce node pour indexer les 854 articles."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tronque le texte envoyé à l'embedding (~280 mots) pour accélérer.\n// Le texte complet reste dans 'text' pour l'affichage; on ajoute 'text_embed'.\nfor (const item of $input.all()) {\n  const t = item.json.text || '';\n  const mots = t.split(/\\s+/);\n  item.json.text_embed = mots.slice(0, 280).join(' ');\n}\nreturn $input.all();"
+      },
+      "id": "n6",
+      "name": "Tronquer pour embedding",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'nomic-embed-text', prompt: $json.text_embed }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 300
+            }
+          },
+          "timeout": 600000
+        }
+      },
+      "id": "n7",
+      "name": "Embedding (Ollama)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO code_famille_chunks (chunk_id, text, metadata, embedding)\nVALUES (\n  '{{ $('Tronquer pour embedding').item.json.chunk_id }}',\n  $$ {{ $('Tronquer pour embedding').item.json.text }} $$,\n  $$ {{ JSON.stringify($('Tronquer pour embedding').item.json.metadata) }} $$::jsonb,\n  '[{{ $json.embedding.join(\",\") }}]'::vector\n)\nON CONFLICT (chunk_id) DO UPDATE\n  SET text = EXCLUDED.text,\n      metadata = EXCLUDED.metadata,\n      embedding = EXCLUDED.embedding;",
+        "options": {}
+      },
+      "id": "n8",
+      "name": "Insert pgvector",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1620,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres n8n"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Démarrer (manuel)": {
+      "main": [
+        [
+          {
+            "node": "Lire le JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire le JSON": {
+      "main": [
+        [
+          {
+            "node": "Parser JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser JSON": {
+      "main": [
+        [
+          {
+            "node": "Éclater en articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Éclater en articles": {
+      "main": [
+        [
+          {
+            "node": "Limite (test 20)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limite (test 20)": {
+      "main": [
+        [
+          {
+            "node": "Tronquer pour embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tronquer pour embedding": {
+      "main": [
+        [
+          {
+            "node": "Embedding (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Insert pgvector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

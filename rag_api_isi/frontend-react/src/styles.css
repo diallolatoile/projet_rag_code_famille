@@ -1,0 +1,94 @@
+:root {
+  --encre: #16263a;
+  --papier: #f7f5f0;
+  --carte: #ffffff;
+  --accent: #1d6e56;
+  --accent-cl: #e1f5ee;
+  --or: #b58a2e;
+  --bordure: #e3ded3;
+  --muet: #6b6358;
+  --surlign: #fff3c4;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--papier);
+  color: var(--encre);
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  line-height: 1.6;
+}
+.app { display: flex; min-height: 100vh; }
+.panneau-chat { flex: 1; max-width: 720px; margin: 0 auto; padding: 0; display: flex; flex-direction: column; }
+.panneau-chat.avec-pdf { margin: 0; max-width: none; border-right: 1px solid var(--bordure); }
+.panneau-pdf { flex: 1; background: #2b3a4d; display: flex; flex-direction: column; }
+
+.bandeau {
+  background: var(--encre); color: var(--papier);
+  padding: 18px 24px; border-bottom: 3px solid var(--or);
+}
+.bandeau h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.bandeau p { margin: 3px 0 0; font-size: 13px; color: #b8c2cc; font-family: system-ui, sans-serif; }
+
+.contenu { padding: 20px 22px; flex: 1; overflow-y: auto; }
+.barre { display: flex; gap: 10px; margin-bottom: 14px; }
+.barre input {
+  flex: 1; padding: 13px 16px; border: 1px solid var(--bordure); border-radius: 8px;
+  font-size: 16px; font-family: system-ui, sans-serif; background: var(--carte);
+}
+.barre input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.barre button {
+  padding: 0 22px; border: none; border-radius: 8px; background: var(--accent);
+  color: #fff; font-size: 15px; font-family: system-ui, sans-serif; font-weight: 500; cursor: pointer;
+}
+.barre button:disabled { opacity: 0.5; cursor: default; }
+
+.actions { font-family: system-ui, sans-serif; font-size: 13px; margin-bottom: 20px; }
+.actions a { color: var(--accent); cursor: pointer; }
+
+.reponse {
+  background: var(--carte); border: 1px solid var(--bordure); border-radius: 10px;
+  padding: 20px 22px; margin-bottom: 20px; font-size: 16px;
+}
+.etiquette {
+  font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 8px;
+}
+.src-titre {
+  font-family: system-ui, sans-serif; font-size: 12px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muet); margin: 0 0 12px;
+}
+.src {
+  background: var(--accent-cl); border-left: 4px solid var(--accent);
+  border-radius: 0 6px 6px 0; padding: 12px 16px; margin-bottom: 12px;
+}
+.src .ref { font-family: system-ui, sans-serif; font-size: 13px; font-weight: 600; color: #0f5440; margin-bottom: 4px; }
+.src .chemin { font-family: system-ui, sans-serif; font-size: 11px; color: var(--muet); margin-bottom: 8px; }
+.src .liens { display: flex; gap: 16px; }
+.src a, .src button.lien {
+  font-family: system-ui, sans-serif; font-size: 13px; color: var(--accent);
+  text-decoration: none; font-weight: 500; background: none; border: none; cursor: pointer; padding: 0;
+}
+.src a:hover, .src button.lien:hover { text-decoration: underline; }
+.score {
+  float: right; font-size: 10px; color: var(--or); background: #fbf3df;
+  padding: 2px 7px; border-radius: 10px; font-family: system-ui, sans-serif;
+}
+.vide, .charge {
+  text-align: center; color: var(--muet); font-family: system-ui, sans-serif;
+  font-size: 14px; padding: 38px 0;
+}
+
+/* Visionneuse PDF */
+.pdf-bandeau {
+  display: flex; align-items: center; gap: 14px; padding: 12px 18px;
+  background: var(--encre); color: var(--papier); border-bottom: 3px solid var(--or);
+  font-family: system-ui, sans-serif;
+}
+.pdf-bandeau button {
+  padding: 6px 12px; border: 1px solid #46596f; background: #1f3148; color: var(--papier);
+  border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.pdf-bandeau .titre { font-weight: 600; font-size: 14px; }
+.pdf-bandeau .fermer { margin-left: auto; }
+.pdf-zone { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 20px; }
+.pdf-zone canvas { box-shadow: 0 2px 14px rgba(0, 0, 0, 0.3); max-width: 100%; height: auto; }

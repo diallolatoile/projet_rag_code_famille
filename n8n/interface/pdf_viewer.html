@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code de la Famille — PDF</title>
+<style>
+  :root { --encre:#1a2b3c; --papier:#f7f5f0; --accent:#1d6e56; --or:#b58a2e; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--papier); font-family:system-ui,-apple-system,sans-serif; }
+  .bandeau { background:var(--encre); color:var(--papier); padding:12px 20px;
+    border-bottom:3px solid var(--or); display:flex; align-items:center; gap:16px; }
+  .bandeau b { font-size:15px; font-weight:600; }
+  .bandeau .info { font-size:13px; color:#b8c2cc; }
+  .barre { display:flex; gap:8px; align-items:center; padding:10px 20px; background:#fff;
+    border-bottom:1px solid #e3ded3; }
+  .barre button { padding:6px 12px; border:1px solid #e3ded3; background:#fff;
+    border-radius:6px; cursor:pointer; font-size:14px; }
+  .barre span { font-size:14px; color:#6b6358; }
+  #zone { display:flex; justify-content:center; padding:20px; }
+  canvas { box-shadow:0 2px 12px rgba(0,0,0,0.12); max-width:100%; }
+  .charge { text-align:center; padding:60px; color:#6b6358; }
+</style>
+</head>
+<body>
+  <div class="bandeau">
+    <b>Code de la Famille</b>
+    <span class="info" id="info">Chargement…</span>
+  </div>
+  <div class="barre">
+    <button onclick="prevPage()">◀ Précédent</button>
+    <span id="pageNum">—</span>
+    <button onclick="nextPage()">Suivant ▶</button>
+    <span id="terme"></span>
+  </div>
+  <div id="zone"><div class="charge">Chargement du PDF…</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  // Paramètres depuis l'URL : ?page=12&highlight=texte à surligner
+  const params = new URLSearchParams(location.search);
+  const PDF_URL = params.get("pdf") || "CODE-DE-LA-FAMILLE.pdf";
+  let pageVoulue = parseInt(params.get("page") || "1", 10);
+  const aSurligner = (params.get("highlight") || "").toLowerCase();
+
+  let pdfDoc = null, pageNum = pageVoulue, rendering = false;
+
+  function rendre(num) {
+    rendering = true;
+    pdfDoc.getPage(num).then(function(page) {
+      const echelle = 1.4;
+      const viewport = page.getViewport({ scale: echelle });
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      const zone = document.getElementById("zone");
+      zone.innerHTML = "";
+      zone.appendChild(canvas);
+
+      const tache = page.render({ canvasContext: ctx, viewport: viewport });
+      tache.promise.then(function() {
+        return page.getTextContent();
+      }).then(function(txt) {
+        // surligner les fragments correspondant au terme recherché
+        if (aSurligner) {
+          ctx.fillStyle = "rgba(255, 220, 50, 0.45)";
+          const mots = aSurligner.split(/\s+/).slice(0, 6).join(" ");
+          txt.items.forEach(function(it) {
+            if (it.str && it.str.toLowerCase().includes(mots.slice(0, 20))) {
+              const tx = pdfjsLib.Util.transform(viewport.transform, it.transform);
+              const h = Math.hypot(tx[2], tx[3]);
+              ctx.fillRect(tx[4], tx[5] - h, it.width * echelle, h * 1.2);
+            }
+          });
+        }
+        rendering = false;
+      });
+      document.getElementById("pageNum").textContent = "Page " + num + " / " + pdfDoc.numPages;
+    });
+  }
+
+  function prevPage() { if (pageNum > 1 && !rendering) { pageNum--; rendre(pageNum); } }
+  function nextPage() { if (pageNum < pdfDoc.numPages && !rendering) { pageNum++; rendre(pageNum); } }
+
+  pdfjsLib.getDocument(PDF_URL).promise.then(function(doc) {
+    pdfDoc = doc;
+    document.getElementById("info").textContent = doc.numPages + " pages";
+    if (aSurligner) document.getElementById("terme").textContent =
+      "• passage surligné";
+    if (pageNum < 1) pageNum = 1;
+    if (pageNum > doc.numPages) pageNum = doc.numPages;
+    rendre(pageNum);
+  }).catch(function(e) {
+    document.getElementById("zone").innerHTML =
+      '<div class="charge">PDF introuvable. Vérifiez qu\'il est servi à l\'URL : ' + PDF_URL + '</div>';
+  });
+</script>
+</body>
+</html>

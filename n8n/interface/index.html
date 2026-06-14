@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code de la Famille — Assistant</title>
+<style>
+  :root {
+    --encre: #1a2b3c;       /* bleu-encre, texte principal */
+    --papier: #f7f5f0;      /* fond papier */
+    --carte: #ffffff;
+    --accent: #1d6e56;      /* vert sénégalais sobre (teal foncé) */
+    --accent-clair: #e1f5ee;
+    --or: #b58a2e;          /* filet doré, sceau officiel */
+    --bordure: #e3ded3;
+    --muet: #6b6358;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--papier);
+    color: var(--encre);
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    line-height: 1.65;
+  }
+  .bandeau {
+    background: var(--encre);
+    color: var(--papier);
+    padding: 22px 24px;
+    border-bottom: 3px solid var(--or);
+  }
+  .bandeau h1 {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .bandeau p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #b8c2cc;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .conteneur {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 18px 60px;
+  }
+  .barre {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  #q {
+    flex: 1;
+    padding: 13px 16px;
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--carte);
+    color: var(--encre);
+  }
+  #q:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 0 22px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .reponse {
+    background: var(--carte);
+    border: 1px solid var(--bordure);
+    border-radius: 10px;
+    padding: 22px 24px;
+    margin-bottom: 22px;
+    font-size: 17px;
+  }
+  .reponse .etiquette {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .sources-titre {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muet);
+    margin: 0 0 12px;
+  }
+  /* La citation encadrée — l'effet "journal" */
+  .citation {
+    background: var(--accent-clair);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .citation .ref {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0f5440;
+    letter-spacing: 0.02em;
+    margin-bottom: 5px;
+  }
+  .citation .chemin {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 11px;
+    color: var(--muet);
+    margin-bottom: 8px;
+  }
+  .citation .extrait {
+    font-size: 15px;
+    color: #143a2e;
+    margin: 0 0 10px;
+  }
+  .citation a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    margin-right: 16px;
+  }
+  .citation a:hover { text-decoration: underline; }
+  /* phrase de la réponse provenant d'un article : soulignée en couleur */
+  .source-soulignee {
+    border-bottom: 2px solid var(--accent);
+    background: linear-gradient(transparent 60%, var(--accent-clair) 60%);
+    cursor: help;
+  }
+  .vide, .charge {
+    text-align: center;
+    color: var(--muet);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    padding: 40px 0;
+  }
+  .sim {
+    float: right;
+    font-size: 10px;
+    color: var(--or);
+    background: #fbf3df;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+  <div class="bandeau">
+    <h1>Code de la Famille — Assistant</h1>
+    <p>Posez une question, obtenez une réponse sourcée avec renvoi au texte officiel</p>
+  </div>
+
+  <div class="conteneur">
+    <div class="barre">
+      <input id="q" type="text" placeholder="Ex : Quel est le délai pour déclarer une naissance ?" />
+      <button id="go" onclick="poser()">Demander</button>
+    </div>
+    <div id="sortie">
+      <div class="vide">Votre réponse et les articles cités apparaîtront ici.</div>
+    </div>
+  </div>
+
+<script>
+  // URL du webhook n8n (mode test : /webhook-test/... ; production : /webhook/...)
+  const WEBHOOK = "http://localhost:5678/webhook/rag-code-famille";
+  // Pages locales servies par nginx (dossier ./shared)
+  const CODE_HTML = "code_famille.html";       // version texte avec ancres #art-N
+  const PDF_VIEWER = "pdf_viewer.html";        // visionneuse PDF.js avec surlignage
+
+  const sortie = document.getElementById("q");
+  document.getElementById("q").addEventListener("keydown", e => {
+    if (e.key === "Enter") poser();
+  });
+
+  function echappe(s) {
+    return (s || "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  }
+
+  function chemin(a) {
+    return [a.livre, a.chapitre, a.section, a.paragraphe].filter(Boolean).join(" › ");
+  }
+
+  async function poser() {
+    const question = document.getElementById("q").value.trim();
+    if (!question) return;
+    const btn = document.getElementById("go");
+    const out = document.getElementById("sortie");
+    btn.disabled = true;
+    out.innerHTML = '<div class="charge">Recherche dans le Code de la Famille…</div>';
+
+    try {
+      const r = await fetch(WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      afficher(data);
+    } catch (e) {
+      out.innerHTML = '<div class="charge">Impossible de joindre le serveur. Vérifiez que le workflow n8n est actif et que l\'URL du webhook est correcte.</div>';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function premierePhrase(texte) {
+    // extrait la 1re phrase "significative" d'un extrait d'article (pour le soulignage)
+    const corps = texte.includes(". ") ? texte.split(". ").slice(1).join(". ") : texte;
+    const m = corps.match(/[^.!?]{20,}?[.!?]/);
+    return m ? m[0].trim() : "";
+  }
+
+  function souligneSources(reponse, articles) {
+    // si une phrase d'un article apparaît (en partie) dans la réponse, on la souligne
+    let html = echappe(reponse);
+    for (const a of articles) {
+      const phrase = premierePhrase(a.extrait || "");
+      if (phrase.length < 25) continue;
+      // on cherche un fragment commun d'au moins ~30 caractères
+      const frag = echappe(phrase.slice(0, 40));
+      if (html.includes(frag)) {
+        html = html.replace(frag,
+          '<span class="source-soulignee" title="Article ' + a.article + '">' + frag + '</span>');
+      }
+    }
+    return html.replace(/\n/g, "<br>");
+  }
+
+  function afficher(data) {
+    const out = document.getElementById("sortie");
+    let html = "";
+
+    html += '<div class="reponse">';
+    html += '<div class="etiquette">Réponse</div>';
+    html += souligneSources(data.reponse, data.articles || []);
+    html += '</div>';
+
+    if (data.articles && data.articles.length) {
+      html += '<p class="sources-titre">Articles cités</p>';
+      for (const a of data.articles) {
+        html += '<div class="citation">';
+        if (a.similarite) html += '<span class="sim">' + Math.round(a.similarite * 100) + '%</span>';
+        html += '<div class="ref">Article ' + echappe(String(a.article)) + ' — ' + echappe(a.titre || "") + '</div>';
+        const ch = chemin(a);
+        if (ch) html += '<div class="chemin">' + echappe(ch) + '</div>';
+        html += '<p class="extrait">' + echappe((a.extrait || "").slice(0, 320)) + '…</p>';
+        // deux liens : version texte (article surligné) + PDF surligné
+        const phrase = encodeURIComponent(premierePhrase(a.extrait || "").slice(0, 50));
+        html += '<a href="' + CODE_HTML + '#art-' + echappe(String(a.article)) + '" target="_blank">Texte de l\'article ↗</a>';
+        html += '<a href="' + PDF_VIEWER + '?page=' + echappe(String(a.page)) + '&highlight=' + phrase + '" target="_blank">PDF surligné (p. ' + echappe(String(a.page)) + ') ↗</a>';
+        html += '</div>';
+      }
+    }
+    out.innerHTML = html;
+  }
+</script>
+</body>
+</html>
