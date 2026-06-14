@@ -89,7 +89,7 @@ curl -X POST http://localhost:8000/api/ingest
 ```
 Deuxième option, en ligne de commande :
 ```bash
-docker compose exec api python -m scripts.ingest
+docker compose -f ./rag_api_infra/docker-compose.yml exec api python /code/scripts/ingest.py
 ```
 Le premier lancement télécharge le modèle e5-large (~2 Go).
 
